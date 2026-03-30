@@ -4,7 +4,7 @@
 % original data files so that the code will run.
 % ***For this part to work, you will need to download and add to your path the
 % original data files in the folder at: https://tinyurl.com/NEPacificWOAdata
-
+path = addpath('C:\Users\nuhin\git\blob-data-lab-part-2-rocks_4_jocks\WOA decadal average data');
 % For your reference, the files provided at the link above were downloaded from
 % https://data.nodc.noaa.gov/thredds/catalog/nodc/archive/data/0114815/public/temperature/netcdf/decav/1.00/catalog.html
 % and subset to only include the North Pacific region
