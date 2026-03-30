@@ -67,49 +67,14 @@ figure(1)
 clf
 
 timeNormalized = datetime(woa_time, 'ConvertFrom', 'datenum');
+subplot(2, 1, 1)
 plot(timeNormalized, woa_papa_rep)
-hold on
+
+subplot(2, 1, 2)
 ooi = struct2table(allData);
-
-ooi_good_idx = vertcat(ooi.good_idx{:});
-ooi_time = vertcat(ooi.time{:});
-ooi_temp = vertcat(ooi.temperature{:});
-ooi_time_clean = ooi_time(ooi_good_idx);
-ooi_temp_clean = ooi_temp(ooi_good_idx);
-ooi_time_clean = datetime(ooi_time_clean, 'ConvertFrom', 'datenum');
-
-plot(ooi_time_clean, ooi_temp_clean, 'r.')
-% -->
-
-
-timeNormalized = datetime(woa_time, 'ConvertFrom', 'datenum');
-
-ooi = struct2table(allData);
-
-ooi_good_idx = vertcat(ooi.good_idx{:});
-ooi_time = vertcat(ooi.time{:});
-ooi_temp = vertcat(ooi.temperature{:});
-ooi_time_clean = ooi_time(ooi_good_idx);
-ooi_temp_clean = ooi_temp(ooi_good_idx);
-ooi_time_clean = datetime(ooi_time_clean, 'ConvertFrom', 'datenum');
-
-
-figure(1)
-clf
-
-timeNormalized = datetime(woa_time, 'ConvertFrom', 'datenum');
-
-plot(timeNormalized, woa_papa_rep, 'b-')
-hold on
-
-plot(ooi_time_clean, ooi_temp_clean, 'r.', 'MarkerSize', 6)
-
-xlabel('Time')
-ylabel('Temperature')
-title('WOA vs OOI Temperature Time Series')
-legend('WOA Climatology', 'OOI Observations')
-
-hold off
+ooi_temp = ooi.temperature;
+ooi_good_idx = ooi.good_idx;
+plot(allData.time, allData.good_idx)
 %% 3a. Interpolate WOA data onto the times where the OOI data were collected at Ocean Station Papa
 % Use the "interp1" function to interplate the World Ocean Atlas
 % temperature data over the extended timeline (woa_papa_rep) from the
