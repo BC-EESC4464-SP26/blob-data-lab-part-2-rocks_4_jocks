@@ -4,8 +4,10 @@
 % original data files so that the code will run.
 % ***For this part to work, you will need to download and add to your path the
 % original data files in the folder at: https://tinyurl.com/NEPacificWOAdata
-path = addpath('C:\Users\nuhin\git\blob-data-lab-part-2-rocks_4_jocks\WOA decadal average data');
-path2 = addpath(genpath('C:\Users\nuhin\git\blob-data-lab-part-1-rocks_4_jocks\OOI_StationPapa_FLMB_CTDdata_BlobDataLab'));
+% path = addpath('C:\Users\nuhin\git\blob-data-lab-part-2-rocks_4_jocks\WOA decadal average data');
+% path2 = addpath(genpath('C:\Users\nuhin\git\blob-data-lab-part-1-rocks_4_jocks\OOI_StationPapa_FLMB_CTDdata_BlobDataLab'));
+
+addpath(genpath('/Users/ilanajacobs/Palevsky_Lab/Classes/EESC6664/blob-data-lab-part-1-rocks_4_jocks/blob-data-lab-part-2-rocks_4_jocks'))
 % For your reference, the files provided at the link above were downloaded from
 % https://data.nodc.noaa.gov/thredds/catalog/nodc/archive/data/0114815/public/temperature/netcdf/decav/1.00/catalog.html
 % and subset to only include the North Pacific region
@@ -33,20 +35,18 @@ end
 %and "indlat")
 % --> 
 % -->
+papa_lon = -144.9;
+papa_lat =   50.1;
+papa_depth = 30;     
 
-[~, indlon] = min(woa.lon);
-[~, indlat] = min(woa.lat);
-%Determine the depth index within woa.depth that matches the depth of the
-%temperature sensor on the OOI flanking mooring B (the code I wrote later
-%will only work if you name this index "inddepth")
-% -->
+[~, indlon]   = min(abs(woa.lon   - papa_lon));
+[~, indlat]   = min(abs(woa.lat   - papa_lat));
+[~, inddepth] = min(abs(woa.depth - papa_depth));
 
-[~, inddepth] = min(woa.depth);
+% 12-month climatological cycle at Station Papa
+woa_papa = squeeze(woa.T(indlon, indlat, inddepth, :));   % 12×1
 
-%Now you will use the latitude, longitude, and depth indices from above to extract the
-%annual climatology of temperature at the location where the OOI flanking
-%mooring B data were collected
-woa_papa = squeeze(woa.T(indlon,indlat,inddepth,:));
+
 
 %% 2a. Create an extended version of the World Ocean Atlas 12-month climatology
 % repeated over the entire timeline of which the OOI mooring data were collected
@@ -63,53 +63,36 @@ woa_papa_rep = [repmat(woa_papa,7,1); woa_papa(1:3)];
 %% 2b. Plot the WOA temperature time series along with the OOI temperature time series from Part 1
 % -->
 
-figure(1)
-clf
 
-timeNormalized = datetime(woa_time, 'ConvertFrom', 'datenum');
-plot(timeNormalized, woa_papa_rep)
-hold on
-ooi = struct2table(allData);
+all_time_clean = [];
+all_temp_clean = [];
 
-ooi_good_idx = vertcat(ooi.good_idx{:});
-ooi_time = vertcat(ooi.time{:});
-ooi_temp = vertcat(ooi.temperature{:});
-ooi_time_clean = ooi_time(ooi_good_idx);
-ooi_temp_clean = ooi_temp(ooi_good_idx);
-ooi_time_clean = datetime(ooi_time_clean, 'ConvertFrom', 'datenum');
+for i = 1:length(allData)
+    t    = allData(i).time;
+    temp = allData(i).temperature;
+    idx  = allData(i).good_idx;    % only plot the cleaned points from part 1      
+    all_time_clean = [all_time_clean; t(idx)];
+    all_temp_clean = [all_temp_clean; temp(idx)];
+end
 
-plot(ooi_time_clean, ooi_temp_clean, 'r.')
-% -->
-
-
-timeNormalized = datetime(woa_time, 'ConvertFrom', 'datenum');
-
-ooi = struct2table(allData);
-
-ooi_good_idx = vertcat(ooi.good_idx{:});
-ooi_time = vertcat(ooi.time{:});
-ooi_temp = vertcat(ooi.temperature{:});
-ooi_time_clean = ooi_time(ooi_good_idx);
-ooi_temp_clean = ooi_temp(ooi_good_idx);
-ooi_time_clean = datetime(ooi_time_clean, 'ConvertFrom', 'datenum');
-
+woa_time_dt = datetime(woa_time, 'ConvertFrom', 'datenum');
+ooi_time_dt = datetime(all_time_clean, 'ConvertFrom', 'datenum');
 
 figure(1)
 clf
 
-timeNormalized = datetime(woa_time, 'ConvertFrom', 'datenum');
-
-plot(timeNormalized, woa_papa_rep, 'b-')
+plot(woa_time_dt, woa_papa_rep, 'b-', 'LineWidth', 2, 'DisplayName', 'WOA Climatology')
 hold on
-
-plot(ooi_time_clean, ooi_temp_clean, 'r.', 'MarkerSize', 6)
+plot(ooi_time_dt, all_temp_clean, 'r.', 'MarkerSize', 4, 'DisplayName', 'OOI Observations')
 
 xlabel('Time')
-ylabel('Temperature')
-title('WOA vs OOI Temperature Time Series')
-legend('WOA Climatology', 'OOI Observations')
-
+ylabel('Temperature (°C)')
+title('WOA Climatology vs. OOI Observations at Ocean Station Papa')
+legend('Location', 'best')
+grid on
 hold off
+
+
 %% 3a. Interpolate WOA data onto the times where the OOI data were collected at Ocean Station Papa
 % Use the "interp1" function to interplate the World Ocean Atlas
 % temperature data over the extended timeline (woa_papa_rep) from the
@@ -117,7 +100,7 @@ hold off
 % data were collected (from your Part 1 analysis)
 % -->
 
-
+woa_interp = interp1(woa_time, woa_papa_rep, all_time_clean, 'linear');
 
 %% 3b. Calculate the temperature anomaly as the difference between the OOI mooring
 % observations (using the smoothed data during good intervals) and the
@@ -125,7 +108,16 @@ hold off
 % same timepoints
 % -->
 
+temp_anomaly = all_temp_clean - woa_interp;
 %% 4. Plot the time series of the T anomaly you have now calculated by combining the WOA and OOI data
+
+figure
+plot(ooi_time_dt, temp_anomaly, 'r.', 'MarkerSize', 4)
+yline(0, 'k-', 'LineWidth', 1.5)
+xlabel('Time')
+ylabel('Temperature Anomaly (°C)')
+title('Temperature Anomaly at Ocean Station Papa (OOI - WOA Climatology)')
+grid on
 
 %% 5. Now bring in the satellite data observed at Ocean Station Papa
 
