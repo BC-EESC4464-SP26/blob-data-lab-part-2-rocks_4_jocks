@@ -9,11 +9,27 @@
 % path = addpath('C:\Users\nuhin\git\blob-data-lab-part-2-rocks_4_jocks\WOA decadal average data');
 % path2 = addpath(genpath('C:\Users\nuhin\git\blob-data-lab-part-1-rocks_4_jocks\OOI_StationPapa_FLMB_CTDdata_BlobDataLab'));
 
-addpath(genpath('/Users/ilanajacobs/Palevsky_Lab/Classes/EESC6664/blob-data-lab-part-1-rocks_4_jocks/blob-data-lab-part-2-rocks_4_jocks'))
-addpath(genpath('/Users/ilanajacobs/Palevsky_Lab/Classes/EESC6664/blob-data-lab-part-1-rocks_4_jocks/blob-data-lab-part-2-rocks_4_jocks/WOA decadal average data'))
+% addpath(genpath('/Users/ilanajacobs/Palevsky_Lab/Classes/EESC6664/blob-data-lab-part-1-rocks_4_jocks/blob-data-lab-part-2-rocks_4_jocks'))
+% addpath(genpath('/Users/ilanajacobs/Palevsky_Lab/Classes/EESC6664/blob-data-lab-part-1-rocks_4_jocks/blob-data-lab-part-2-rocks_4_jocks/WOA decadal average data'))
+
+thisDir   = fileparts(mfilename('fullpath'));
+part1Root = 'C:\Users\nuhin\git\blob-data-lab-part-1-rocks_4_jocks';
+ooiDir    = fullfile(part1Root, 'OOI_StationPapa_FLMB_CTDdata_BlobDataLab');
+woaDir    = fullfile(thisDir, 'WOA decadal average data');
+addpath(thisDir);
+if isfolder(woaDir), addpath(woaDir); end
+if isfolder(ooiDir), addpath(ooiDir); end
+addpath(genpath(part1Root));
+
+set(0, 'DefaultFigureVisible', 'off');
+
 % For your reference, the files provided at the link above were downloaded from
 % https://data.nodc.noaa.gov/thredds/catalog/nodc/archive/data/0114815/public/temperature/netcdf/decav/1.00/catalog.html
 % and subset to only include the North Pacific region
+
+if ~exist('allData', 'var')
+    allData = buildOOIAllData(ooiDir);
+end
 
 for i = 1:12
     if i < 10
@@ -55,8 +71,8 @@ woa_papa = squeeze(woa.T(indlon, indlat, inddepth, :));   % 12×1
 % repeated over the entire timeline of which the OOI mooring data were collected
 %I have done this step for you: it creates a timeline that you will use
 %below to plot the WOA climatology, extending the 12-month seasonal cycle
-%to cover the period from the beginning of 2013 through the end of March
-%2020
+% to cover the period from the beginning of 2013 through the end of March
+% 2020
 
 woa_time = [datenum(2013,1:12,15) datenum(2014,1:12,15)...
     datenum(2015,1:12,15) datenum(2016,1:12,15) datenum(2017,1:12,15)...
@@ -123,8 +139,9 @@ woa_interp = interp1(woa_time, woa_papa_rep, all_time_clean, 'linear');
 temp_anomaly = all_temp_clean - woa_interp;
 %% 4. Plot the time series of the T anomaly you have now calculated by combining the WOA and OOI data
 
-figure
-plot(ooi_time_dt, temp_anomaly, 'r.', 'MarkerSize', 4)
+figure(4)
+clf
+plot(ooi_time_dt, temp_anomaly, 'r.', 'MarkerSize', 4, 'DisplayName', 'Mooring anomaly (OOI - WOA)')
 yline(0, 'k-', 'LineWidth', 1.5)
 xlabel('Time')
 ylabel('Temperature Anomaly (°C)')
@@ -138,7 +155,8 @@ grid on
 %timestamp and use the datenum function to make the conversion)
 % -->
 
-filename = 'jplMURSST41anommday_72e0_376a_802d.nc';
+filename = fullfile(thisDir, 'jplMURSST41anommday_72e0_376a_802d.nc');
+assert(isfile(filename), 'Missing satellite file: %s', filename);
 
 %_CoordinateAxisType = 'Time'
                        % actual_range        = [1358294400  1752624000]
@@ -149,16 +167,15 @@ filename = 'jplMURSST41anommday_72e0_376a_802d.nc';
                        % time_origin         = '01-JAN-1970 00:00:00'
                        % units               = 'seconds since 1970-01-01T00:00:00Z'
 
-ncdisp(filename);
+% ncdisp(filename);
 
 
 % Read time variable from NetCDF file
-time = ncread(filename, 'time');
+time_sat = ncread(filename, 'time');
 
 % Convert satellite time to MATLAB timestamp
 % Units: seconds since 1970-01-01T00:00:00Z
-time0 = datenum('1970-01-01', 'yyyy-mm-dd');
-timeFixed = time0 + double(time) / (60*60*24);
+timeFixed = datenum(datetime(double(time_sat), 'ConvertFrom', 'posixtime'));
 
 timeCheck = datestr(timeFixed(1:5));
 disp(timeCheck);
@@ -170,8 +187,8 @@ disp(timeCheck);
 % -->
 % -->
 
-lat_sat = ncread(filename, 'latitude');
-lon_sat = ncread(filename, 'longitude');
+lat_sat = double(ncread(filename, 'latitude'));
+lon_sat = double(ncread(filename, 'longitude'));
 
 
 % Find indices nearest to OSP
@@ -186,33 +203,151 @@ lon_sat = ncread(filename, 'longitude');
 %to your plot from step 4) so that you can compare the two records
 
 sstAnom_OSP = squeeze(ncread(filename, 'sstAnom', [lon_idx, lat_idx, 1], [1, 1, Inf]));
+sstAnom_OSP = double(sstAnom_OSP(:));
+sstAnom_OSP(sstAnom_OSP <= -900) = NaN;
 
 % Convert timeFixed to datetime to match ooi_time_dt
 sat_time_dt = datetime(timeFixed, 'ConvertFrom', 'datenum');
 
+sat_on_mooring = interp1(timeFixed, sstAnom_OSP, all_time_clean, 'linear', NaN);
+
 % Plot both records
-figure
-plot(ooi_time_dt, temp_anomaly, 'c.', 'MarkerSize', 12, 'DisplayName', 'OOI Mooring (OOI - WOA)')
+figure(4)
 hold on
-plot(sat_time_dt, sstAnom_OSP, 'b-', 'LineWidth', 4, 'DisplayName', 'Satellite SSTanom')
-yline(0, 'k-', 'LineWidth', 1.5)
-ylim([-1 5])
-xlabel('Time')
+plot(sat_time_dt, sstAnom_OSP, 'b-', 'LineWidth', 2, 'DisplayName', 'Satellite SST anomaly (OSP cell)')
+plot(ooi_time_dt, sat_on_mooring, '.', 'Color', [0.15 0.65 0.35], 'MarkerSize', 5, ...
+    'DisplayName', 'Satellite anomaly interp. to mooring times')
+hold off
 ylabel('Temperature Anomaly (°C)')
-title('Temperature Anomaly at Ocean Station Papa')
-legend('Mooring Based SST Anomaly', 'Satellite Based SST Anomaly','Location', 'best')
-grid off
+title('Temperature Anomaly at Ocean Station Papa: Mooring vs. Satellite')
+legend('Location', 'best')
+grid on
 
-%% Plot SST Anomaly
-[~, feb2020_idx] = min(abs(timeFixed - datenum(2020, 2, 1)));
+%% Extension (Visualizing data): SST anomaly maps at several times + markers on the time series
+% In Part 1, you made one figure showing a regional map of the satellite SST data.
+% Make a series of SSTanom maps from different times within the OOI mooring time series record
+% to show how the Ocean Station Papa record fits into a broader regional context,
+% and show the times you selected on the time series plot.
 
-sstAnom_feb2020 = squeeze(ncread(filename, 'sstAnom', [1, 1, feb2020_idx], [Inf, Inf, 1]));
+moor_tmin = min(all_time_clean);
+moor_tmax = max(all_time_clean);
+inMooring = timeFixed >= moor_tmin & timeFixed <= moor_tmax;
+idxPool   = find(inMooring)';
+if numel(idxPool) < 2
+    idxPool = (1:numel(timeFixed))';
+end
+% Four representative times: spread across the mooring overlap window
+target_dn = [ datenum(2014,6,15), datenum(2015,8,15), datenum(2017,1,15), datenum(2019,6,15) ];
+target_dn = target_dn(target_dn >= moor_tmin & target_dn <= moor_tmax);
+if isempty(target_dn)
+    pick = round(linspace(1, numel(idxPool), 4));
+    mapIdx = idxPool(pick);
+else
+    mapIdx = zeros(1, numel(target_dn));
+    for k = 1:numel(target_dn)
+        [~, mapIdx(k)] = min(abs(timeFixed - target_dn(k)));
+    end
+    mapIdx = unique(mapIdx, 'stable');
+end
+if numel(mapIdx) > 4
+    mapIdx = mapIdx(1:4);
+end
 
+[Lon, Lat] = meshgrid(lon_sat(:), lat_sat(:));
+nt_sat     = numel(timeFixed);
+maxAbsMap  = 3;
+clevs      = linspace(-maxAbsMap, maxAbsMap, 25);
 
-figure
-worldmap([20 60], [-170 -100])
-contourfm(double(lat_sat), double(lon_sat), double(sstAnom_feb2020)')
-colorbar
-colormap(cmocean('balance', 'pivot', 0))
-geoshow('landareas.shp','FaceColor','black')
-title('Sea Surface Temperature Anomaly - February 2020')
+figure(5)
+clf
+nMaps = numel(mapIdx);
+nrows = ceil(nMaps / 2);
+ncols = min(2, max(1, nMaps));
+for k = 1:nMaps
+    it = mapIdx(k);
+    F  = double(squeeze(ncread(filename, 'sstAnom', [1, 1, it], [Inf, Inf, 1]))');
+    F(F <= -900) = NaN;
+    subplot(nrows, ncols, k)
+    contourf(Lon, Lat, F, clevs, 'LineColor', 'none')
+    hold on
+    plot(papa_lon, papa_lat, 'kp', 'MarkerFaceColor', [1 0.92 0.2], 'MarkerSize', 9, 'LineWidth', 1)
+    hold off
+    colormap(gca, redBlueDiverging(256))
+    clim([-maxAbsMap maxAbsMap])
+    colorbar
+    xlabel('Longitude (°E)')
+    ylabel('Latitude (°N)')
+    title(sprintf('SST anomaly — %s', datestr(timeFixed(it), 'mmm yyyy')))
+    axis tight
+    grid on
+end
+sgtitle('Regional MUR SST anomaly (monthly; nearest grid to assignment subset)')
+
+figure(4)
+hold on
+for k = 1:numel(mapIdx)
+    xline(datetime(timeFixed(mapIdx(k)), 'ConvertFrom', 'datenum'), '--', ...
+        'Color', [0.35 0.35 0.35], 'LineWidth', 1.1, 'HandleVisibility', 'off', ...
+        'Label', datestr(timeFixed(mapIdx(k)), 'mmm yyyy'), ...
+        'LabelHorizontalAlignment', 'left', 'FontSize', 8);
+end
+hold off
+
+%% Export figures for lab report (optional)
+figDir = fullfile(thisDir, 'figures');
+if ~isfolder(figDir), mkdir(figDir); end
+try
+    print(figure(1), fullfile(figDir, 'fig01_woa_ooi.png'), '-dpng', '-r300');
+    print(figure(4), fullfile(figDir, 'fig04_anomaly_compare.png'), '-dpng', '-r300');
+    print(figure(5), fullfile(figDir, 'fig05_sst_anom_maps.png'), '-dpng', '-r300');
+catch ME
+    warning('Figure export skipped: %s', ME.message);
+end
+
+%% --- Local functions --------------------------------------------------------
+
+function allData = buildOOIAllData(ooiDir)
+    std_cutoff = 0.25;
+    filenames = {
+        'deployment0001_GP03FLMB.nc', ...
+        'deployment0003_GP03FLMB.nc', ...
+        'deployment0004_GP03FLMB.nc', ...
+        'deployment0005_GP03FLMB.nc', ...
+        'deployment0006_GP03FLMB.nc'
+        };
+    deploymentNums = [1, 3, 4, 5, 6];
+    allData = struct([]);
+    for i = 1:numel(filenames)
+        fp = fullfile(ooiDir, filenames{i});
+        assert(isfile(fp), 'Missing OOI file: %s', fp);
+        time        = ncread(fp, 'time');
+        temperature = ncread(fp, 'ctdmo_seawater_temperature');
+        time0       = datenum('1900-01-01');
+        timeFixed   = time0 + time / (60 * 60 * 24);
+        movingMean  = movmean(temperature, (24 * 60) / 15);
+        movingStd   = movstd(temperature, (24 * 60) / 15);
+        good_idx    = find(movingStd <= std_cutoff);
+        allData(i).deploymentNum = deploymentNums(i);
+        allData(i).filename      = filenames{i};
+        allData(i).time          = timeFixed;
+        allData(i).temperature   = temperature;
+        allData(i).movingMean    = movingMean;
+        allData(i).movingStd     = movingStd;
+        allData(i).good_idx      = good_idx;
+    end
+end
+
+function cmap = redBlueDiverging(n)
+    anchors = [
+        0.02 0.20 0.52
+        0.30 0.55 0.80
+        0.90 0.90 0.90
+        0.85 0.35 0.25
+        0.55 0.00 0.14
+        ];
+    xi  = linspace(0, 1, n);
+    x0  = linspace(0, 1, size(anchors, 1));
+    cmap = [interp1(x0, anchors(:, 1), xi)', ...
+            interp1(x0, anchors(:, 2), xi)', ...
+            interp1(x0, anchors(:, 3), xi)'];
+end
