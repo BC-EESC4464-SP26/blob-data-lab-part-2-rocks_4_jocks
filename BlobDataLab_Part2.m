@@ -4,10 +4,13 @@
 % original data files so that the code will run.
 % ***For this part to work, you will need to download and add to your path the
 % original data files in the folder at: https://tinyurl.com/NEPacificWOAdata
+
+
 % path = addpath('C:\Users\nuhin\git\blob-data-lab-part-2-rocks_4_jocks\WOA decadal average data');
 % path2 = addpath(genpath('C:\Users\nuhin\git\blob-data-lab-part-1-rocks_4_jocks\OOI_StationPapa_FLMB_CTDdata_BlobDataLab'));
 
 addpath(genpath('/Users/ilanajacobs/Palevsky_Lab/Classes/EESC6664/blob-data-lab-part-1-rocks_4_jocks/blob-data-lab-part-2-rocks_4_jocks'))
+addpath(genpath('/Users/ilanajacobs/Palevsky_Lab/Classes/EESC6664/blob-data-lab-part-1-rocks_4_jocks/blob-data-lab-part-2-rocks_4_jocks/WOA decadal average data'))
 % For your reference, the files provided at the link above were downloaded from
 % https://data.nodc.noaa.gov/thredds/catalog/nodc/archive/data/0114815/public/temperature/netcdf/decav/1.00/catalog.html
 % and subset to only include the North Pacific region
@@ -75,16 +78,25 @@ for i = 1:length(allData)
     all_temp_clean = [all_temp_clean; temp(idx)];
 end
 
+all_time_raw = [];
+all_temp_raw = [];
+
+for i = 1:length(allData)
+    all_time_raw = [all_time_raw; allData(i).time];
+    all_temp_raw = [all_temp_raw; allData(i).temperature];
+end
+
+ooi_time_raw_dt = datetime(all_time_raw, 'ConvertFrom', 'datenum');
+
 woa_time_dt = datetime(woa_time, 'ConvertFrom', 'datenum');
 ooi_time_dt = datetime(all_time_clean, 'ConvertFrom', 'datenum');
 
 figure(1)
 clf
-
-plot(woa_time_dt, woa_papa_rep, 'b-', 'LineWidth', 2, 'DisplayName', 'WOA Climatology')
+plot(ooi_time_raw_dt, all_temp_raw, 'k.', 'MarkerSize', 2, 'DisplayName', 'OOI Raw Data')
 hold on
-plot(ooi_time_dt, all_temp_clean, 'r.', 'MarkerSize', 4, 'DisplayName', 'OOI Observations')
-
+plot(woa_time_dt, woa_papa_rep, 'b-', 'LineWidth', 3, 'DisplayName', 'WOA Climatology')
+plot(ooi_time_dt, all_temp_clean, 'r.', 'MarkerSize', 8, 'DisplayName', 'OOI Cleaned Data')
 xlabel('Time')
 ylabel('Temperature (°C)')
 title('WOA Climatology vs. OOI Observations at Ocean Station Papa')
@@ -126,6 +138,31 @@ grid on
 %timestamp and use the datenum function to make the conversion)
 % -->
 
+filename = 'jplMURSST41anommday_72e0_376a_802d.nc';
+
+%_CoordinateAxisType = 'Time'
+                       % actual_range        = [1358294400  1752624000]
+                       % axis                = 'T'
+                       % ioos_category       = 'Time'
+                       % long_name           = 'Centered Time'
+                       % standard_name       = 'time'
+                       % time_origin         = '01-JAN-1970 00:00:00'
+                       % units               = 'seconds since 1970-01-01T00:00:00Z'
+
+ncdisp(filename);
+
+
+% Read time variable from NetCDF file
+time = ncread(filename, 'time');
+
+% Convert satellite time to MATLAB timestamp
+% Units: seconds since 1970-01-01T00:00:00Z
+time0 = datenum('1970-01-01', 'yyyy-mm-dd');
+timeFixed = time0 + double(time) / (60*60*24);
+
+timeCheck = datestr(timeFixed(1:5));
+disp(timeCheck);
+
 %5b. In order to extract the satellite SSTanom data from the grid cell
 %nearest to OSP, calculate the indices of the longitude and latitude in the
 %satellite data grid nearest to the latitude and longitude of Ocean Station
@@ -133,8 +170,49 @@ grid on
 % -->
 % -->
 
+lat_sat = ncread(filename, 'latitude');
+lon_sat = ncread(filename, 'longitude');
+
+
+% Find indices nearest to OSP
+[~, lat_idx] = min(abs(lat_sat - papa_lat));
+[~, lon_idx] = min(abs(lon_sat - papa_lon));
+
+
+
 %% 6. Plot the satellite SSTanom data extracted from Ocean Station Papa and
 %the mooring-based temperature anomaly calculated by combining the OOI and
 %WOA data together as separate lines on the same time-series plot (adding
 %to your plot from step 4) so that you can compare the two records
 
+sstAnom_OSP = squeeze(ncread(filename, 'sstAnom', [lon_idx, lat_idx, 1], [1, 1, Inf]));
+
+% Convert timeFixed to datetime to match ooi_time_dt
+sat_time_dt = datetime(timeFixed, 'ConvertFrom', 'datenum');
+
+% Plot both records
+figure
+plot(ooi_time_dt, temp_anomaly, 'c.', 'MarkerSize', 12, 'DisplayName', 'OOI Mooring (OOI - WOA)')
+hold on
+plot(sat_time_dt, sstAnom_OSP, 'b-', 'LineWidth', 4, 'DisplayName', 'Satellite SSTanom')
+yline(0, 'k-', 'LineWidth', 1.5)
+ylim([-1 5])
+xlabel('Time')
+ylabel('Temperature Anomaly (°C)')
+title('Temperature Anomaly at Ocean Station Papa')
+legend('Mooring Based SST Anomaly', 'Satellite Based SST Anomaly','Location', 'best')
+grid off
+
+%% Plot SST Anomaly
+[~, feb2020_idx] = min(abs(timeFixed - datenum(2020, 2, 1)));
+
+sstAnom_feb2020 = squeeze(ncread(filename, 'sstAnom', [1, 1, feb2020_idx], [Inf, Inf, 1]));
+
+
+figure
+worldmap([20 60], [-170 -100])
+contourfm(double(lat_sat), double(lon_sat), double(sstAnom_feb2020)')
+colorbar
+colormap(cmocean('balance', 'pivot', 0))
+geoshow('landareas.shp','FaceColor','black')
+title('Sea Surface Temperature Anomaly - February 2020')
